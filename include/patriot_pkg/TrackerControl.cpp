@@ -1,4 +1,26 @@
 /*
+patriot_pkg version 0.1 -- ROS Package for the Patriot Polhemus Trackers.
+Copyright  ©  2023  Benjamin Thomas walt
+
+This file is part of the ROS patriot_pkg.
+
+patriot_pkg is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+patriot_pkg is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with patriot_pkg.  If not, see <http://www.gnu.org/licenses/>.
+
+*************************************************************************
+*/
+
+/*
 TrackerControl.cpp
 Function: This program interfaces with PiTracker.cpp which is provided by Polhemus
 to use the Patriot HS tracker.  It is a simple interface that only implements some
@@ -18,7 +40,7 @@ TrackerControl::TrackerControl(){
     printf("Memory Allocation Error creating tracker communications module\n");
   }
 
-  // {0x0f44,0xef12,0x02,0x82}
+
   int ret = pTrak->UsbConnect(0x0f44,0xef20,0x04,0x88);
   if(ret != 0){
     std::cout << "Tracker USB Connection Error. Return Value: " << ret << std::endl;
@@ -26,7 +48,13 @@ TrackerControl::TrackerControl(){
     std::cout << "Tracker USB Connection Made" << std::endl;
   }
 
-  /*Flush out junk??*/
+  /*Flush out junk in buffers*/
+  BYTE buf[BUFFER_SIZE];
+  do {
+    pTrak->WriteTrkData((void*)"\r",1);  // send just a cr, should return an short "Invalid Command" response
+    usleep(100000);
+    len=pTrak->ReadTrkData(buf,BUFFER_SIZE);  // keep trying till we get a response
+  } while (!len);
 
   /*Set to Binary*/
   pTrak->WriteTrkData((void*)"F1\r",3); //Binary
@@ -34,35 +62,24 @@ TrackerControl::TrackerControl(){
 
   /*Get number of stations*/
   NumStations = StationStatus();
+  if(NumStations<0){
+    // Set up failed, so try again.  This often fixes it.
+    NumStations = StationStatus();
+  }
+
   std::cout << "Number of Stations Found: " << NumStations <<std::endl;
 
   // std::cout << ActiveStationMap << std::endl;
   if(ActiveStationMap != 0){
-  for(int itr=0;itr<16;itr++){
-    if((ActiveStationMap>>itr) & 1){
-      std::cout << "Station " << itr << " is active." << std::endl;
+    for(int itr=0;itr<16;itr++){
+      if((ActiveStationMap>>itr) & 1){
+        std::cout << "Station " << itr << " is active." << std::endl;
+      }
     }
-    // printf(" %c,", buf[itr] );
-  }
   }else{
     std::cout << "Error: No Actve Stations Found!" << std::endl;
   }
 
-  /*Get number of stations*/
-  NumStations = StationStatus();
-  std::cout << "Number of Stations Found: " << NumStations <<std::endl;
-
-  // std::cout << ActiveStationMap << std::endl;
-  if(ActiveStationMap != 0){
-  for(int itr=0;itr<16;itr++){
-    if((ActiveStationMap>>itr) & 1){
-      std::cout << "Station " << itr << " is active." << std::endl;
-    }
-    // printf(" %c,", buf[itr] );
-  }
-  }else{
-    std::cout << "Error: No Actve Stations Found!" << std::endl;
-  }
 
 
   /*Set output format*/
@@ -150,7 +167,7 @@ int TrackerControl::StationStatus(){
 void TrackerControl::SetHemisphere(int x, int y, int z){
   char cmd[32];
   snprintf(cmd, sizeof(cmd), "h*,%d,%d,%d\r", x, y, z);
-  // Length of command varies with hemisphere so find it's length
+  // Length of command varies with hemisphere so find its length
   int length_counter;
   for(length_counter=0;length_counter<32;length_counter++){
     if(cmd[length_counter]==13){ //13 is the ascii for "\r"
@@ -210,30 +227,31 @@ int TrackerControl::GetPose(_Quaternion* Q){
     return -1;
   }else{
     for(int itr=0;itr<NumStations;itr++){
-      int offset = itr*36;
+      int offset = itr*36; //For this set up, 36 is the offset between stations.
       int cur_station = buf[2 + offset] - 1;
-      // std::cout << "Cur Station: " << cur_station << std::endl;
+
+      converter C; //Union converts between output binary and the desired float
       Q[cur_station].station_number = cur_station;
-      int temp = (buf[11 + offset]<<24) | (buf[10 + offset]<<16)| (buf[9 + offset]<<8) | buf[8 + offset];
-      Q[cur_station].x_pos_cm = *(float*)&(temp);
-      temp = (buf[15 + offset]<<24) | (buf[14 + offset]<<16)| (buf[13 + offset]<<8) | buf[12 + offset];
-      Q[cur_station].y_pos_cm = *(float*)&(temp);
-      temp = (buf[19 + offset]<<24) | (buf[18 + offset]<<16)| (buf[17 + offset]<<8) | buf[16 + offset];
-      Q[cur_station].z_pos_cm = *(float*)&(temp);
-      temp = (buf[23 + offset]<<24) | (buf[22 + offset]<<16)| (buf[21 + offset]<<8) | buf[20 + offset];
-      Q[cur_station].q_w = *(float*)&(temp);
-      temp = (buf[27 + offset]<<24) | (buf[26 + offset]<<16)| (buf[25 + offset]<<8) | buf[24 + offset];
-      Q[cur_station].q_x = *(float*)&(temp);
-      temp = (buf[31 + offset]<<24) | (buf[30 + offset]<<16)| (buf[29 + offset]<<8) | buf[28 + offset];
-      Q[cur_station].q_y = *(float*)&(temp);
-      temp = (buf[35 + offset]<<24) | (buf[34 + offset]<<16)| (buf[33 + offset]<<8) | buf[32 + offset];
-      Q[cur_station].q_z = *(float*)&(temp);
+      C.bin_val = (buf[11 + offset]<<24) | (buf[10 + offset]<<16)| (buf[9 + offset]<<8) | buf[8 + offset];
+      Q[cur_station].x_pos_cm = C.float_val;
+      C.bin_val = (buf[15 + offset]<<24) | (buf[14 + offset]<<16)| (buf[13 + offset]<<8) | buf[12 + offset];
+      Q[cur_station].y_pos_cm = C.float_val;
+      C.bin_val = (buf[19 + offset]<<24) | (buf[18 + offset]<<16)| (buf[17 + offset]<<8) | buf[16 + offset];
+      Q[cur_station].z_pos_cm = C.float_val;
+      C.bin_val = (buf[23 + offset]<<24) | (buf[22 + offset]<<16)| (buf[21 + offset]<<8) | buf[20 + offset];
+      Q[cur_station].q_w = C.float_val;
+      C.bin_val = (buf[27 + offset]<<24) | (buf[26 + offset]<<16)| (buf[25 + offset]<<8) | buf[24 + offset];
+      Q[cur_station].q_x = C.float_val;
+      C.bin_val = (buf[31 + offset]<<24) | (buf[30 + offset]<<16)| (buf[29 + offset]<<8) | buf[28 + offset];
+      Q[cur_station].q_y = C.float_val;
+      C.bin_val = (buf[35 + offset]<<24) | (buf[34 + offset]<<16)| (buf[33 + offset]<<8) | buf[32 + offset];
+      Q[cur_station].q_z = C.float_val;
     }
     return 0;
   }
 }
 
-/* Summary: Gets the numbe of stations in use
+/* Summary: Gets the number of stations in use
 * Parameters: None
 * Returns: Number of a stations
 * Notes:
@@ -242,9 +260,9 @@ int TrackerControl::GetStationNumber(){
   return NumStations;
 }
 
-/* Summary: Gets the numbe of stations in use
+/* Summary: Gets the current hemisphere in use
 * Parameters: None
-* Returns: Number of a stations
+* Returns: hemisphere value as a pointer to an array
 * Notes:
 */
 int* TrackerControl::GetHemisphere(){

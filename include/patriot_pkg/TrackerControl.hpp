@@ -18,6 +18,11 @@ struct _Quaternion{
   int station_number;
 };
 
+union converter{
+  unsigned int bin_val;
+  float float_val;
+};
+
 
 class TrackerControl {
 public:
@@ -28,8 +33,7 @@ public:
   void SetUnits(int value);
   int GetStationNumber();
   int* GetHemisphere();
-  // std::vector<int> get_hemisphere();
-  // int nstations;
+
 
 
 private:
@@ -37,8 +41,6 @@ private:
   const int BUFFER_SIZE = 1000;
   const int INCHES = 0;
   const int CM = 1;
-  //#int nstations;
-  // int x_hs, y_hs, z_hs;
   int len; //Maybe don't need...
   int StationStatus(void);
   int NumStations = 0;
