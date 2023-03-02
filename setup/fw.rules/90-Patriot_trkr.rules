@@ -1,0 +1,6 @@
+# Patriot HS -- Load FW
+ATTR{idVendor}=="0f44", ATTR{idProduct}=="ef21",ACTION=="add", \
+RUN+="/sbin/fxload -t fx2 -D %N -I /usr/local/share/PolhemusUsb/PatriotUSB2.hex -s /usr/local/share/PolhemusUsb/a3load.hex"
+
+# Patriot HS -- Permissions
+ATTR{idVendor}=="0f44", ATTR{idProduct}=="ef20",ACTION=="add",MODE="0666"

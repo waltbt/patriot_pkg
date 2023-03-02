@@ -1,0 +1,6 @@
+These setup files include files for all the devices that can work with PiTracker.cpp.
+As the TrackerControl.cpp is written for the PatriotHS, the setup files only set that up.
+I have included the rest to allow a user to setup a different device if desired.
+The template of the install.bash code can be followed to include additional devices.
+(Make sure it is an executable)
+install_all.bash installs files for all the devices.

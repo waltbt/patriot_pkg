@@ -1,6 +1,7 @@
+// TrackerControl.cpp
 /*
 patriot_pkg version 0.1 -- ROS Package for the Patriot Polhemus Trackers.
-Copyright  ©  2023  Benjamin Thomas walt
+Copyright  ©  2023  Benjamin Thomas Walt
 
 This file is part of the ROS patriot_pkg.
 
@@ -25,11 +26,12 @@ TrackerControl.cpp
 Function: This program interfaces with PiTracker.cpp which is provided by Polhemus
 to use the Patriot HS tracker.  It is a simple interface that only implements some
 of the features of the tracker and only on the Patriot HS.  It should be simple
-though to modify it to work with other trackers and other features.
+to modify it to work with other trackers and other features.
 Author: Benjamin Walt
-Date: 1/19/2023
+Date: 3/2/2023
 Version: 0.1
 */
+
 
 #include "TrackerControl.hpp"
 
@@ -39,8 +41,14 @@ TrackerControl::TrackerControl(){
   if (!pTrak){
     printf("Memory Allocation Error creating tracker communications module\n");
   }
-
-
+  /*
+  {0x0f44,0xff20,0x04,0x88},  // Lib HS
+  {0x0f44,0xff12,0x02,0x82},   // Lib
+  {0x0f44,0xef20,0x04,0x88},  // Patriot HS
+  {0x0f44,0xef12,0x02,0x82},  // Patriot
+  {0x0f44,0x0002,0x02,0x82},	// Fastrak
+  {0x0f44,0x0003,0x02,0x84}};  // Fastrak 3
+  */
   int ret = pTrak->UsbConnect(0x0f44,0xef20,0x04,0x88);
   if(ret != 0){
     std::cout << "Tracker USB Connection Error. Return Value: " << ret << std::endl;
@@ -49,9 +57,10 @@ TrackerControl::TrackerControl(){
   }
 
   /*Flush out junk in buffers*/
+  int len = 0;
   BYTE buf[BUFFER_SIZE];
   do {
-    pTrak->WriteTrkData((void*)"\r",1);  // send just a cr, should return an short "Invalid Command" response
+    pTrak->WriteTrkData((void*)"\r",1);  // send just a cr, should return a short "Invalid Command" response
     usleep(100000);
     len=pTrak->ReadTrkData(buf,BUFFER_SIZE);  // keep trying till we get a response
   } while (!len);
@@ -61,15 +70,14 @@ TrackerControl::TrackerControl(){
   usleep(100000);
 
   /*Get number of stations*/
-  NumStations = StationStatus();
+  NumStations = GetStationStatus();
   if(NumStations<0){
-    // Set up failed, so try again.  This often fixes it.
-    NumStations = StationStatus();
+    // Setup failed, so try again.  This often fixes it.
+    NumStations = GetStationStatus();
   }
 
   std::cout << "Number of Stations Found: " << NumStations <<std::endl;
 
-  // std::cout << ActiveStationMap << std::endl;
   if(ActiveStationMap != 0){
     for(int itr=0;itr<16;itr++){
       if((ActiveStationMap>>itr) & 1){
@@ -83,22 +91,19 @@ TrackerControl::TrackerControl(){
 
 
   /*Set output format*/
-  // len=0;
-  // BYTE buf[BUFFER_SIZE];
   /*
   * - Applies to all stations
   2 - X, Y, Z Cartesian coordinates of position
   7 - Orientation Quaternion
   */
-  pTrak->WriteTrkData((void*)"O*,2,7\r",7);
-  // pTrak->WriteTrkData((void*)"O*,3,7\r",7);
+  // pTrak->WriteTrkData((void*)"O*,2,7\r",7); //Uncomment for regular precision
+  /*
+  * - Applies to all stations
+  3 - X, Y, Z Cartesian coords, extended precision
+  7 - Orientation Quaternion
+  */
+  pTrak->WriteTrkData((void*)"O*,3,7\r",7); //Uncomment for extended precision
   usleep(100000);
-  // len=pTrak->ReadTrkData(buf,BUFFER_SIZE);  // keep trying till we get a response
-  // printf("Message: \n");
-  // printf("\nData Length: %d \n", len);
-  // for(int itr=0;itr<len;itr++){
-  //   printf(" %c,", buf[itr] );
-  // }
 
   /*Set Units*/
   SetUnits(CM); //centimeters
@@ -109,6 +114,7 @@ TrackerControl::TrackerControl(){
 
 
 TrackerControl::~TrackerControl(){
+  pTrak->CloseTrk();
   delete pTrak;
 }
 
@@ -119,14 +125,14 @@ TrackerControl::~TrackerControl(){
 * Notes: This command returns more details, but is only being used for the number of stations.
 * Also updates the active station map, but maybe this is not super useful.
 */
-int TrackerControl::StationStatus(){
-  len=0;
+int TrackerControl::GetStationStatus(){
+  int len=0;
   BYTE buf[BUFFER_SIZE];
   char temp = 'u' & 0x1f;
   static char cmd[] = { temp, '0', '\r', '\0' };
   pTrak->WriteTrkData((void*)cmd,3);
   usleep(100000);
-  len=pTrak->ReadTrkData(buf,BUFFER_SIZE);  // keep trying till we get a response
+  len=pTrak->ReadTrkData(buf,BUFFER_SIZE);
 
   if(len<1){
     return -2; // Failed read
@@ -134,20 +140,13 @@ int TrackerControl::StationStatus(){
   if(buf[4] != 32){
     return -1; // Error
   }
-  // for(int itr=0;itr<len;itr++){
-  //   printf(" %d,", buf[itr] );
-  // }
   //Count the number of stations in bitmap
   int station_sum = 0;
   for(int itr=0;itr<8;itr++){
-    // std::cout << "Iter: " << itr << " Total: " << station_sum << std::endl;
-    // std::cout << ((buf[8]>>itr)&1) << std::endl;
-    // std::cout << "Total: " << station_sum << std::endl;
     station_sum = station_sum + ((buf[7]>>itr)&1);
     station_sum = station_sum + ((buf[8]>>itr)&1);
   }
   ActiveStationMap = (buf[7]<<8) + buf[8];
-  // std::cout << ActiveStationMap << std::endl;
   return station_sum;
 }
 
@@ -201,60 +200,42 @@ void TrackerControl::SetUnits(int value){
 * Notes:
 */
 int TrackerControl::GetPose(_Quaternion* Q){
-  len=0;
   BYTE buf[BUFFER_SIZE];
   pTrak->WriteTrkData((void*)"p",1);
 
-  len=pTrak->ReadTrkData(buf,BUFFER_SIZE);  // read tracker data
-  // printf("Data Length: %d\n", len);
-  // printf("Message: ");
-  // for(int itr=0;itr<len;itr++){
-  //   printf(" %d,", buf[itr] );
-  // }
-
-  // printf("\n");
-  // int length = len(data_set);
-  // char buffer[15];
-  // int n = 0;
-  // printf("Device: %c %c\n", buf[0], buf[1]);
-  // printf("Station: %d\n", buf[2]);
-  // printf("Command: %c\n", buf[3]);
-  // printf("Error: %d\n", buf[4]);
-  // printf("Size: %d", buf[7]<<8|buf[6]);
-  // printf("\n");
-  if(buf[4] != 32){
+  pTrak->ReadTrkData(buf,BUFFER_SIZE);  // read tracker data
+  if(buf[4] != 32){ //32 is an ascii space and indicates no error
     std::cout << "Error Reading Pose.  No update." << std::endl;
     return -1;
   }else{
     for(int itr=0;itr<NumStations;itr++){
       int offset = itr*36; //For this set up, 36 is the offset between stations.
       int cur_station = buf[2 + offset] - 1;
-
       converter C; //Union converts between output binary and the desired float
-      Q[cur_station].station_number = cur_station;
+      Q[itr].station_number = cur_station;
       C.bin_val = (buf[11 + offset]<<24) | (buf[10 + offset]<<16)| (buf[9 + offset]<<8) | buf[8 + offset];
-      Q[cur_station].x_pos_cm = C.float_val;
+      Q[itr].x_pos_cm = C.float_val;
       C.bin_val = (buf[15 + offset]<<24) | (buf[14 + offset]<<16)| (buf[13 + offset]<<8) | buf[12 + offset];
-      Q[cur_station].y_pos_cm = C.float_val;
+      Q[itr].y_pos_cm = C.float_val;
       C.bin_val = (buf[19 + offset]<<24) | (buf[18 + offset]<<16)| (buf[17 + offset]<<8) | buf[16 + offset];
-      Q[cur_station].z_pos_cm = C.float_val;
+      Q[itr].z_pos_cm = C.float_val;
       C.bin_val = (buf[23 + offset]<<24) | (buf[22 + offset]<<16)| (buf[21 + offset]<<8) | buf[20 + offset];
-      Q[cur_station].q_w = C.float_val;
+      Q[itr].q_w = C.float_val;
       C.bin_val = (buf[27 + offset]<<24) | (buf[26 + offset]<<16)| (buf[25 + offset]<<8) | buf[24 + offset];
-      Q[cur_station].q_x = C.float_val;
+      Q[itr].q_x = C.float_val;
       C.bin_val = (buf[31 + offset]<<24) | (buf[30 + offset]<<16)| (buf[29 + offset]<<8) | buf[28 + offset];
-      Q[cur_station].q_y = C.float_val;
+      Q[itr].q_y = C.float_val;
       C.bin_val = (buf[35 + offset]<<24) | (buf[34 + offset]<<16)| (buf[33 + offset]<<8) | buf[32 + offset];
-      Q[cur_station].q_z = C.float_val;
+      Q[itr].q_z = C.float_val;
     }
     return 0;
   }
 }
 
-/* Summary: Gets the number of stations in use
+/* Summary: Gets the stored number of stations in use
 * Parameters: None
 * Returns: Number of a stations
-* Notes:
+* Notes: Does not poll the device for information. GetStationStatus() does that.
 */
 int TrackerControl::GetStationNumber(){
   return NumStations;

@@ -11,18 +11,30 @@ It publishes a Pose type message for each station at 60Hz.
 
 ## Requirements  
 usb-1.0  
+fxload  
 This has been tested on Ubuntu 18.04 and ROS Melodic.
 
 ## Set up  
 In the setup directory, use:  
-$ sudo ./setup.sh
+$ ./install.bash
 This copies some key files over and changes the permission for the USB
-The file is only set up for the Patriot tracker and needs to be changed to set up other devices.
+The file is only set up for the Patriot tracker and needs to be changed to set up other devices.  
+Use install_all.bash for all the trackers.  
 
 ## What is a Polhemus Tracker?  
+A Polhemus Tracker is a device that uses magnetic signals to locate a tracking device in space relative to a source.  
+It gives the pose (position and orientation) of the tracker.
+https://polhemus.com/  
+Types potentially supported by this code:  
+* Patriot
+* Liberty
+* Fastrak
 
 ## How to use with other Trackers  
-* Change the set up file for the correct device
-* Change the numbers...
+* Change the setup file for the correct device.  
+* Change the numbers for product id and other values for the correct device.  
 * Make sure all the commands work.  Change as needed.
-* Need to set up for the correct number of stations (Patriot only uses 2 and this code is not always ready for more.)  
+* Need to set up for the correct number of stations (Patriot only uses 2 and for some functions that is hard coded in.)  
+
+## License  
+This work is licensed under GPL v3.  
