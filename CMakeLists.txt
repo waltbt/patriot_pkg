@@ -4,14 +4,6 @@ project(patriot_pkg)
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 
-#find_package(PkgConfig REQUIRED)
-#pkg_check_modules(libusb-cow libusb-cow QUIET)
-
-#if(NOT ${libusb-cow_FOUND})
-#  message(FATAL_ERROR "Could not find libusb-1.0")
-#endif()
-
-
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -130,7 +122,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
- add_executable(${PROJECT_NAME}_node src/patriot_pkg_exec.cpp)
+add_executable(${PROJECT_NAME}_node src/patriot_pkg_exec.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
