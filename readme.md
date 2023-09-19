@@ -21,6 +21,9 @@ This copies some key files over and changes the permission for the USB.
 The file is only set up for the Patriot tracker and needs to be changed to set up other devices.  
 Use install_all.bash for all the trackers.  
 
+## Testing
+It can be tested with a ROS setup or a nonROS test file (test_tracker.cpp) is included in the include folder.  Simply make with the makefile and run. It should read from a connected tracker.  
+
 ## What is a Polhemus Tracker?  
 A Polhemus Tracker is a device that uses magnetic signals to locate a tracking device in space relative to a source.  
 It gives the pose (position and orientation) of the tracker. https://polhemus.com/  
