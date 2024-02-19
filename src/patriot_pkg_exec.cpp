@@ -25,8 +25,20 @@ along with patriot_pkg.  If not, see <http://www.gnu.org/licenses/>.
 #include <ros/ros.h>
 #include "patriot_pkg/TrackerControl.hpp"
 #include "patriot_pkg/tracker_pose.h"
+#include "patriot_pkg/set_hemisphere.h"
+#include "patriot_pkg/get_hemisphere.h"
 
+/*Callback to set the hemisphere in use.  The values sent, must have a specific format, but this is not checked.*/
+void set_hemisphere_callback(const patriot_pkg::set_hemisphere::ConstPtr& msg){
+  tracker->SetHemisphere(msg->data[0],msg->data[1],msg->data[2]);
+  std::cout << "Setting Hemisphere X: " <<msg->data[0] << " Y: " << msg->data[1] << " Z: " << msg->data[2] << std::endl;
+}
 
+/*Callback to check the hemisphere in use.  The values is what is stored in the state, not the device.*/
+void get_hemisphere_callback(patriot_pkg::get_hemisphere::Request& req, patriot_pkg::get_hemisphere::Response& resp){
+  resp.hemisphere = tracker->GetHemisphere();
+  std::cout << "Setting Hemisphere X: " <<resp.hemisphere[0] << " Y: " << resp.hemisphere[1] << " Z: " << resp.hemisphere[2] << std::endl;
+}
 
 int main (int argc, char **argv)
 {
@@ -34,6 +46,8 @@ int main (int argc, char **argv)
   ros::NodeHandle nh;
   ros::Rate rate(60); //Patriot works at maximum 60Hz
   ros::Publisher arm_pose_pub = nh.advertise<patriot_pkg::tracker_pose>("patriot/arm_pose", 10);
+  ros::Subscriber set_hemisphere_sub = nh.subscribe("patriot/set_hemisphere", 10, set_hemisphere_callback);
+  ros::ServiceServer service = nh.advertiseService("patriot/get_hemisphere", add);
   TrackerControl* tracker = new TrackerControl;
   int num_stations = tracker->GetStationNumber();
   if (num_stations <= 0 || num_stations > 2){ //Patriot can only have 1 or 2 stations
